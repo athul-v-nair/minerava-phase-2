@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Minerva — System Architecture",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "review-hot-path", "label": "Review hot path", "focus": ["gitlab", "api", "vcs", "review", "llm"], "note": "MR webhook → diff → LLM → score → comment" },
+      { "id": "control-path", "label": "Control path", "focus": ["users", "web", "api", "auth", "db"], "note": "Dashboard manages orgs, VCS connections, repos" },
+      { "id": "security", "label": "Security", "focus": ["api", "crypto", "auth", "db"], "note": "PATs encrypted, webhooks verified" }
+    ]
+  },
+  "components": [
+    { "id": "users", "type": "external", "label": "Developers", "sublabel": "Browser", "pos": [40, 280], "size": [120, 60] },
+    { "id": "web", "type": "frontend", "label": "React Dashboard", "sublabel": "Vite :5173", "pos": [240, 280], "size": [140, 60] },
+    { "id": "api", "type": "backend", "label": "FastAPI", "sublabel": ":8000", "pos": [480, 280], "size": [150, 60] },
+    { "id": "auth", "type": "security", "label": "Auth", "sublabel": "JWT + bcrypt", "pos": [480, 120], "size": [150, 60] },
+    { "id": "crypto", "type": "security", "label": "Encryption", "sublabel": "Fernet", "pos": [480, 440], "size": [150, 60] },
+    { "id": "vcs", "type": "backend", "label": "VCS Adapter", "sublabel": "GitLab impl", "pos": [720, 180], "size": [140, 60] },
+    { "id": "review", "type": "backend", "label": "Review Engine", "sublabel": "scoring 0-10", "pos": [720, 380], "size": [140, 60] },
+    { "id": "gitlab", "type": "external", "label": "GitLab CE", "sublabel": ":8929", "pos": [950, 180], "size": [130, 60] },
+    { "id": "llm", "type": "cloud", "label": "opencode --serve", "sublabel": "OpenAI compat", "pos": [950, 380], "size": [130, 60] },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "Alembic", "pos": [720, 540], "size": [140, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "docker-compose", "wraps": ["web", "api", "auth", "crypto", "vcs", "review", "db", "gitlab", "llm"] },
+    { "kind": "security-group", "label": "encrypted PATs + HMAC", "wraps": ["api", "auth", "crypto", "db"] }
+  ],
+  "connections": [
+    { "from": "users", "to": "web", "label": "HTTPS" },
+    { "from": "web", "to": "api", "label": "REST + JWT" },
+    { "from": "api", "to": "vcs" },
+    { "from": "vcs", "to": "gitlab" },
+    { "from": "gitlab", "to": "api", "label": "webhook", "variant": "emphasis" },
+    { "from": "api", "to": "review" },
+    { "from": "review", "to": "llm" },
+    { "from": "review", "to": "db" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "Hot Path", "items": ["MR webhook → diff → LLM → score 0-10 → comment", "Idempotent, never-loop, fail-quietly"] },
+    { "dot": "emerald", "title": "Control Path", "items": ["React manages orgs, VCS connections, repos", "Instruction pipelines tab for custom prompts"] },
+    { "dot": "rose", "title": "Security", "items": ["PATs Fernet-encrypted, JWT signed, HMAC webhooks", "Tenant isolated by org_id"] }
+  ]
+}

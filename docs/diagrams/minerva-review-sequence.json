@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Minerva — MR Review Sequence",
+    "viewBox": [980, 980],
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "trigger", "label": "Trigger + guard", "focus": ["gitlab", "api", "db"], "note": "Webhook verified, bot ignored, duplicate head_sha dropped." },
+      { "id": "fetch-and-reason", "label": "Fetch diff + reason", "focus": ["api", "vcs", "gitlab", "review", "llm"], "note": "Diff is untrusted data; prompt hierarchy keeps it from becoming instruction." },
+      { "id": "post-and-audit", "label": "Post + audit", "focus": ["review", "vcs", "gitlab", "db", "web"], "note": "Comment formatted (score+summary+findings), audit row persisted, visible in dashboard." }
+    ]
+  },
+  "participants": [
+    { "id": "dev", "type": "external", "label": "Developer", "sublabel": "GitLab user" },
+    { "id": "gitlab", "type": "external", "label": "GitLab CE", "sublabel": "self-hosted" },
+    { "id": "api", "type": "backend", "label": "FastAPI", "sublabel": "webhook handler" },
+    { "id": "db", "type": "database", "label": "SQLite", "sublabel": "reviews + repos" },
+    { "id": "vcs", "type": "backend", "label": "VCS Adapter", "sublabel": "GitLab impl" },
+    { "id": "review", "type": "backend", "label": "Review Engine", "sublabel": "prompt + scoring" },
+    { "id": "llm", "type": "cloud", "label": "LLM", "sublabel": "opencode compat" },
+    { "id": "web", "type": "frontend", "label": "React UI", "sublabel": "audit view" }
+  ],
+  "segments": [
+    { "from": 120, "to": 300, "label": "Trigger & Guard" },
+    { "from": 320, "to": 620, "label": "Fetch & Reason" },
+    { "from": 640, "to": 900, "label": "Post & Audit" }
+  ],
+  "messages": [
+    { "from": "dev", "to": "gitlab", "y": 165, "label": "open MR / comment @minerva" },
+    { "from": "gitlab", "to": "api", "y": 195, "label": "POST /webhooks/gitlab", "variant": "emphasis" },
+    { "from": "api", "to": "db", "y": 250, "label": "SELECT reviews by (repo, head_sha)" },
+    { "from": "db", "to": "api", "y": 285, "label": "not found → continue; found → 200 no-op", "variant": "return" },
+    { "from": "api", "to": "vcs", "y": 340, "label": "getDiff(mr_iid)" },
+    { "from": "vcs", "to": "gitlab", "y": 380, "label": "GET /merge_requests/:iid/diffs" },
+    { "from": "gitlab", "to": "vcs", "y": 420, "label": "diff + head_sha", "variant": "return" },
+    { "from": "api", "to": "review", "y": 470, "label": "review(diff, pipeline instructions)" , "variant": "emphasis" },
+    { "from": "review", "to": "llm", "y": 510, "label": "POST /v1/chat/completions (fenced diff)", "variant": "emphasis" },
+    { "from": "llm", "to": "review", "y": 550, "label": "{summary, findings} JSON", "variant": "return" },
+    { "from": "review", "to": "vcs", "y": 670, "label": "postComment(score+summary+findings)" , "variant": "emphasis" },
+    { "from": "vcs", "to": "gitlab", "y": 710, "label": "POST /notes (MR comment)" },
+    { "from": "gitlab", "to": "vcs", "y": 750, "label": "comment_url", "variant": "return" },
+    { "from": "review", "to": "db", "y": 790, "label": "INSERT reviews (audit trail)" },
+    { "from": "db", "to": "web", "y": 830, "label": "GET /reviews shows score + findings", "variant": "dashed" },
+    { "from": "api", "to": "gitlab", "y": 870, "label": "200 OK (fail-quietly on LLM error: retry once → failed)", "variant": "return" }
+  ],
+  "activations": [
+    { "participant": "api", "from": 190, "to": 315, "type": "backend" },
+    { "participant": "db", "from": 270, "to": 310, "type": "database" },
+    { "participant": "vcs", "from": 345, "to": 435, "type": "backend" },
+    { "participant": "gitlab", "from": 385, "to": 440, "type": "external" },
+    { "participant": "review", "from": 465, "to": 800, "type": "backend" },
+    { "participant": "llm", "from": 505, "to": 555, "type": "cloud" },
+    { "participant": "vcs", "from": 665, "to": 755, "type": "backend" },
+    { "participant": "db", "from": 785, "to": 805, "type": "database" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Guardrails in the sequence", "items": ["Idempotent per (repo, head_sha) → duplicate webhook is no-op", "Never-loop: bot-authored webhook dropped before any LLM call", "Fail-quietly: LLM timeout → retry once → status=failed, no noisy comment"] },
+    { "dot": "cyan", "title": "Prompt injection defense", "items": ["Diff wrapped in ```diff fence as untrusted data", "System > pipeline instructions > diff hierarchy — diff cannot override", "Output schema-validated; score recomputed server-side"] },
+    { "dot": "rose", "title": "Audit", "items": ["Every attempt stores trigger, head_sha, model, sanitized raw_response, score, comment_url", "React /reviews shows history per repo/MR"] }
+  ]
+}

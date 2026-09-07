@@ -1,0 +1,39 @@
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    ports:
+      - "${GITLAB_PORT:-8929}:80"
+    volumes:
+      - gitlab_data:/var/opt/gitlab
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/-/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  api:
+    build: ./api
+    env_file: .env
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./data:/app/data
+      - ./api:/app
+    depends_on:
+      - gitlab
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build: ./web
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  gitlab_data:
