@@ -3,8 +3,9 @@ import sys
 from logging.config import fileConfig
 from pathlib import Path
 
-from alembic import context
 from sqlalchemy import create_engine, pool
+
+from alembic import context
 
 # Ensure api/ is on sys.path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -14,8 +15,14 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# No models yet for Slice 0 — target_metadata stays None
-target_metadata = None
+try:
+    import app.models.organization  # noqa: F401
+    import app.models.user  # noqa: F401
+    from app.models.base import Base  # noqa: F401
+
+    target_metadata = Base.metadata
+except Exception:
+    target_metadata = None
 
 # Allow DATABASE_URL env to override alembic.ini
 db_url = os.getenv("DATABASE_URL")
@@ -30,7 +37,7 @@ else:
             # alembic.ini is at api/alembic.ini
             base = Path(config.config_file_name).parent if config.config_file_name else Path.cwd()
             abs_path = (base / p).resolve()
-            config.set_main_option("sqlalchemy.url", f"sqlite:///{abs_path}")
+            config.set_main_option("sqlalchemy.url", f"sqlite:///{abs_path.as_posix()}")
 
 
 def run_migrations_offline() -> None:
